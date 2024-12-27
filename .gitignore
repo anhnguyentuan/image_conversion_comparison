@@ -1,6 +1,6 @@
-/test_data/output/*
+/test_data/*
 !/test_data/output/.gitkeep
-log
+!/test_data/pdf_files/.gitkeep
 
 .vscode
 *.env
