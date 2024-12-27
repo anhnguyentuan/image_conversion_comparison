@@ -1,4 +1,4 @@
-/test_data/*
+/test_data/output/*
 !/test_data/output/.gitkeep
 !/test_data/pdf_files/.gitkeep
 
