@@ -1,0 +1,7 @@
+/test_data/output/*
+!/test_data/output/.gitkeep
+log
+
+.vscode
+*.env
+.DS_Store
