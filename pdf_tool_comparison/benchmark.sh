@@ -3,7 +3,7 @@
 # Input/Output directory
 TOOL="$1"
 
-SCRIPT_DIR=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+SCRIPT_DIR=$(dirname "$0")
 INPUT_DIR=$(realpath "$SCRIPT_DIR/../test_data/pdf_files")
 OUTPUT_DIR=$(realpath "$SCRIPT_DIR/../test_data/output")
 
@@ -13,12 +13,12 @@ mkdir -p $OUTPUT_DIR
 echo "[$TOOL] Benchmark Summary - $(date)"
 echo "Input Directory: $INPUT_DIR"
 echo "Output Directory: $OUTPUT_DIR"
-echo "==================================="
 
 # Function to run benchmark for a PDF file
 run_benchmark_for_file() {
     local file=$1
     local file_name=$(basename "$file")
+    echo "==================================="
     echo "Processing $file_name..."
 
     local tool="$TOOL"
@@ -27,29 +27,36 @@ run_benchmark_for_file() {
 
     printf "Sanitize"
     local san_file="$output_dir/sanitized.pdf"
-    benchmark_command "$(sanitize $tool $file $san_file)"
+    local san_cmd=$(sanitize $tool $file $san_file)
+    local perf_cmd=$(run_with_perf "$san_cmd")
+    eval $perf_cmd
 
     printf "Split pages"
     local split_dir="$output_dir/split"
     local split_files="$split_dir/page_%d.pdf"
     mkdir -p "$split_dir"
-    benchmark_command "$(split $tool $file $split_files)"
+    local split_cmd=$(split $tool $san_file $split_files)
+    local perf_cmd=$(run_with_perf "$split_cmd")
+    eval $perf_cmd
 
     # Fetch the first file in directory to convert to png
     printf "Convert png"
+    local start_time=$(echo $EPOCHREALTIME)
     local png_dir="$output_dir/png"
     local png_tool=$tool
     mkdir -p "$png_dir"
-    for file in $split_dir/*.pdf; do
-        local file_name=$(basename "$file")
-        local png_file="$png_dir/${file_name%.*}"
-        if [[ -f $file ]]; then
-            printf "  $file_name"
-            benchmark_command "$(convert_png  $tool $file $png_file)"
-        fi
+    commands=()
+    for page_file in "$split_dir"/*.pdf; do
+        file_name=$(basename $page_file)
+        png_file="$png_dir/${file_name%.*}"
+        local perf_cmd=$(run_with_perf "$(convert_png $tool $page_file $png_file)" $file_name)
+        commands+=("$perf_cmd")
     done
+    printf "%s\n" "${commands[@]}" | parallel -j 4 --silent
 
-    echo "==================================="
+    local end_time=$(echo $EPOCHREALTIME)
+    local duration=$(echo "$end_time - $start_time" | bc -l)
+    echo "Done in $duration secs"
     sleep 0.1
 }
 
@@ -87,7 +94,7 @@ convert_png() {
     local input_file="$2"
     local output_file="$3"
 
-    local cmd="pdftoppm -r 350 -png $input_file $output_file"
+    local cmd="pdftoppm -r 350 -singlefile -png $input_file $output_file"
     if [[ $tool == "gs" ]]; then
         output_file="$output_file.png"
         local cmd="gs -dSAFER -dBATCH -dNOPAUSE -dNOPROMPT -sDEVICE=png16m -r350 -sOutputFile=$output_file $input_file"
@@ -95,57 +102,15 @@ convert_png() {
     echo "$cmd"
 }
 
-compare_mse() {
-    local file1="$1"
-    local file2="$2"
-
-    local mse=$(compare -metric MSE $file1 $file2 null: 2>&1)
-    echo "$mse"
-}
-
-
-# Benchmark a command and log the results
-benchmark_command() {
+run_with_perf() {
     local cmd="$1"
+    local prefix="$2"
 
-    # Init PID monitor
-    # Run the command in the background
-    $cmd >/dev/null 2>&1 &
-    local PID=$!
-
-    # Init peak memory and CPU usage
-    local start_time=$(gdate +%s.%N) # Use $EPOCHREALTIME
-    local cpu_usage=()
-    local mem_usage=()
-
-    # Monitor the process until it finishes
-    while kill -0 "$PID" 2>/dev/null; do
-        # Capture memory and CPU usage
-        local pid_stats=$(ps -p "$PID" -o %mem,%cpu | tail +2)
-        local mem_usage=$(echo "$pid_stats" | awk '{print $1}')
-        local cpu_usage=$(echo "$pid_stats" | awk '{print $2}')
-
-        sleep 0.1
-    done
-
-    # Calculate duration of the process
-    local end_time=$(gdate +%s.%N)
-    local duration=$(echo "$end_time - $start_time" | bc -l)
-    local cpu_p90=$(calculate_p90 "${cpu_usage[@]}")
-    local mem_p90=$(calculate_p90 "${mem_usage[@]}")
-
-    # Finalize the log
-    echo "  $duration secs | CPU $cpu_p90% | MEM $mem_p90%"
-}
-
-calculate_p90() {
-    local array=("$@")
-    local n=${#array[@]}
-
-    sorted=($(printf "%s\n" "${array[@]}" | sort -n))
-    # Calculate
-    local index=$(echo "($n * 0.9) - 1" | bc | awk '{print int($1)}')
-    echo "${sorted[$index]}"
+    local perf_cmd="perf stat -e task-clock -- $cmd 2>&1 | awk \
+        '/time elapsed/ { elapsed=\$1 \"s\" } \
+        /CPUs utilized/ { cpu_utilized=\$1 } \
+        END { printf \"$prefix : %s, %s cpus\n\", elapsed, cpu_utilized }'"
+    echo "$perf_cmd"
 }
 
 # Fetch and process each PDF file in the input directory
