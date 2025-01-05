@@ -60,6 +60,7 @@ run_benchmark_for_file() {
     sleep 0.1
 }
 
+GS_DEFAULT_OPTIONS='-dNOPAUSE -dQUIET -dSAFER -dBATCH -dNumRenderingThreads=4 -dBandBufferSpace=500000000 -dBufferSpace=1000000000 -c "30000000 setvmthreshold"'
 sanitize() {
     local tool="$1"
     local input_file="$2"
@@ -67,7 +68,7 @@ sanitize() {
     if [[ $tool == "poppler" ]]; then
         local cmd="pdftocairo -pdf $input_file $output_file"
     elif [[ $tool == "gs" ]]; then
-        local cmd="gs -dQUIET -dSAFER -dBATCH -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -o $output_file $input_file"
+        local cmd="gs -dNOPAUSE -dQUIET -dSAFER -dBATCH -dNEWPDF=true -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress -o $output_file -f $input_file"
     elif [[ $tool == "qpdf" ]]; then
         local cmd="qpdf --empty --object-streams=generate --flatten-annotations=all --pages $input_file 1-z -- $output_file"
     fi
@@ -82,7 +83,7 @@ split() {
     if [[ $tool == "poppler" ]]; then
         local cmd="pdfseparate $input_file $output_file"
     elif [[ $tool == "gs" ]]; then
-        local cmd="gs -sDEVICE=pdfwrite -dNOPAUSE -dQUIET -dBATCH -dSAFER -sOutputFile=$output_file $input_file"
+        local cmd="gs -dNOPAUSE -dQUIET -dSAFER -dBATCH -sDEVICE=pdfwrite -sOutputFile=$output_file -f $input_file"
     elif [[ $tool == "qpdf" ]]; then
         local cmd="qpdf --split-pages $input_file $output_file"
     fi
@@ -97,7 +98,7 @@ convert_png() {
     local cmd="pdftoppm -r 350 -singlefile -png $input_file $output_file"
     if [[ $tool == "gs" ]]; then
         output_file="$output_file.png"
-        local cmd="gs -dSAFER -dBATCH -dNOPAUSE -dNOPROMPT -sDEVICE=png16m -r350 -sOutputFile=$output_file $input_file"
+        local cmd="gs $GS_DEFAULT_OPTIONS -sDEVICE=png16m -r350 -sOutputFile=$output_file -f $input_file"
     fi
     echo "$cmd"
 }
