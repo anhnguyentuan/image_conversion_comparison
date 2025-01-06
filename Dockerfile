@@ -15,3 +15,7 @@ RUN apk update && apk add --no-cache \
 RUN yes 'will cite' | parallel --citation
 
 WORKDIR /app
+
+COPY ./pdf_tool_comparison ./pdf_tool_comparison
+
+ENTRYPOINT [ "/bin/bash" ]

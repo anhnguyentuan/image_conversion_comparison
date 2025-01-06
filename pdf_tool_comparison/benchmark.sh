@@ -2,10 +2,12 @@
 
 # Input/Output directory
 TOOL="$1"
+PARALLEL_JOBS="${2:-4}"
+THREADS_NUMBER="${3:-4}"
 
 SCRIPT_DIR=$(dirname "$0")
-INPUT_DIR=$(realpath "$SCRIPT_DIR/../test_data/pdf_files")
-OUTPUT_DIR=$(realpath "$SCRIPT_DIR/../test_data/output")
+INPUT_DIR="${INPUT:-$(realpath "$SCRIPT_DIR/../test_data/pdf_files")}"
+OUTPUT_DIR="${OUTPUT:-$(realpath "$SCRIPT_DIR/../test_data/output")}"
 
 # Create output directory if it doesn't exist
 mkdir -p $OUTPUT_DIR
@@ -22,7 +24,7 @@ run_benchmark_for_file() {
     echo "Processing $file_name..."
 
     local tool="$TOOL"
-    local output_dir="$OUTPUT_DIR/$tool/$file_name"
+    local output_dir="$OUTPUT_DIR/$file_name"
     mkdir -p $output_dir
 
     printf "Sanitize"
@@ -52,7 +54,7 @@ run_benchmark_for_file() {
         local perf_cmd=$(run_with_perf "$(convert_png $tool $page_file $png_file)" $file_name)
         commands+=("$perf_cmd")
     done
-    printf "%s\n" "${commands[@]}" | parallel -j 4 --silent
+    printf "%s\n" "${commands[@]}" | parallel -j $PARALLEL_JOBS
 
     local end_time=$(echo $EPOCHREALTIME)
     local duration=$(echo "$end_time - $start_time" | bc -l)
@@ -60,7 +62,7 @@ run_benchmark_for_file() {
     sleep 0.1
 }
 
-GS_DEFAULT_OPTIONS='-dNOPAUSE -dQUIET -dSAFER -dBATCH -dNumRenderingThreads=4 -dBandBufferSpace=500000000 -dBufferSpace=1000000000 -c "30000000 setvmthreshold"'
+GS_DEFAULT_OPTIONS="-dNOPAUSE -dQUIET -dSAFER -dNumRenderingThreads=$THREADS_NUMBER -dBandBufferSpace=500000000 -dBufferSpace=1000000000 -c \"30000000 setvmthreshold\""
 sanitize() {
     local tool="$1"
     local input_file="$2"
@@ -98,7 +100,7 @@ convert_png() {
     local cmd="pdftoppm -r 350 -singlefile -png $input_file $output_file"
     if [[ $tool == "gs" ]]; then
         output_file="$output_file.png"
-        local cmd="gs $GS_DEFAULT_OPTIONS -sDEVICE=png16m -r350 -sOutputFile=$output_file -f $input_file"
+        local cmd="gs -sDEVICE=png16m -r350 -sOutputFile=$output_file $GS_DEFAULT_OPTIONS -f $input_file"
     fi
     echo "$cmd"
 }
@@ -109,7 +111,7 @@ run_with_perf() {
 
     local perf_cmd="perf stat -e task-clock -- $cmd 2>&1 | awk \
         '/time elapsed/ { elapsed=\$1 \"s\" } \
-        /CPUs utilized/ { cpu_utilized=\$1 } \
+        /CPUs utilized/ { cpu_utilized=\$5 } \
         END { printf \"$prefix : %s, %s cpus\n\", elapsed, cpu_utilized }'"
     echo "$perf_cmd"
 }

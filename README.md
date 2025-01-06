@@ -26,6 +26,8 @@ Supported tools are `gs` | `poppler` | `qpdf`
 ```bash
 docker run -it --rm --name=pdf-tool-comparison \
     --security-opt "seccomp:unconfined" \
+    -e INPUT="/app/test_data/pdf_files" \
+    -e OUTPUT="/app/test_data/output" \
     -v ./:/app/ \
     pdf-tool-comparison \
     /bin/bash ./pdf_tool_comparison/benchmark.sh [qpdf|gs|poppler] > bench.log
