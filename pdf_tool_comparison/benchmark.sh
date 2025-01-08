@@ -41,6 +41,11 @@ run_benchmark_for_file() {
     local split_cmd=$(split $tool $san_file $split_files)
     local perf_cmd=$(run_with_perf "$split_cmd")
     eval $perf_cmd
+    # Rename the split files to remove leading zeros
+    for page_file in "$split_dir"/*.pdf; do
+        new_name=$(echo "$page_file" | sed -E 's/_0*([1-9][0-9]*).pdf/_\1.pdf/')
+        mv "$page_file" "$new_name"
+    done
 
     # Fetch the first file in directory to convert to png
     printf "Convert png"
