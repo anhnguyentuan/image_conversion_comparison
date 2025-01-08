@@ -15,6 +15,7 @@ mkdir -p $OUTPUT_DIR
 echo "[$TOOL] Benchmark Summary - $(date)"
 echo "Input Directory: $INPUT_DIR"
 echo "Output Directory: $OUTPUT_DIR"
+echo "With $PARALLEL_JOBS parallel jobs and $THREADS_NUMBER rendering threads for gs"
 
 # Function to run benchmark for a PDF file
 run_benchmark_for_file() {
